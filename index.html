@@ -1,0 +1,175 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link rel="icon" href="data:">
+<title>imgremap</title>
+</head><body>
+<h1>imgremap</h1>
+<main>
+  <div>
+    <canvas id=canvas></canvas><br>
+    p0 <input id=p0x type=number step=1>, <input id=p0y type=number step=1><br>
+    p1 <input id=p1x type=number step=1>, <input id=p1y type=number step=1><br>
+    p2 <input id=p2x type=number step=1>, <input id=p2y type=number step=1><br>
+    p3 <input id=p3x type=number step=1>, <input id=p3y type=number step=1><br>
+  </div>
+  <div>
+    <canvas id=canvas2></canvas><br>
+    width <input id=inwidth value=1600 type=number> x height <input id=inheight value=900 type=number><br>
+  </div>
+</main>
+
+<hr>
+<a href=https://github.com/code4fukui/imgremap/>src on GitHub</a><br>
+
+<style>
+body {
+  margin: 1em;
+}
+main > div {
+  display: inline-block;
+  vertical-align: top;
+}
+canvas {
+  max-width: 46vw;
+  max-height: 80vh;
+}
+input[type=number] {
+  width: 4em;
+}
+</style>
+<script type="module">
+import { waitImageLoad } from "https://js.sabae.cc/waitImageLoad.js";
+import { waitClick } from "https://js.sabae.cc/waitClick.js";
+import { setDropImageFileListener } from "https://js.sabae.cc/setDropImageFileListener.js";
+
+const setImage = async (img) => {
+  canvas.width = img.width;
+  canvas.height = img.height;
+  canvas.style.aspectRatio = img.width / img.height;
+  const g = canvas.getContext("2d");
+  g.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  const drawCircle = (g, x, y, r) => {
+    g.beginPath();
+    g.ellipse(x, y, r, r, 0, 0, 2 * Math.PI);
+    g.stroke();
+  };
+
+  const imgd = g.getImageData(0, 0, canvas.width, canvas.height);
+  console.log(imgd);
+
+  // series: left top, right top, right bottom, left bottom
+  const pnts = [];
+  for (let i = 0; i < 4; i++) {
+    const e = await waitClick(canvas);
+    console.log(e);
+    const p = {
+      x: e.offsetX / canvas.clientWidth * canvas.width,
+      y: e.offsetY / canvas.clientHeight * canvas.height,
+    };
+    g.strokeStyle = "black";
+    drawCircle(g, p.x, p.y, 11);
+    g.strokeStyle = "white";
+    drawCircle(g, p.x, p.y, 10);
+    drawCircle(g, p.x, p.y, 9);
+    document.getElementById("p" + i + "x").value = p.x.toFixed(0);
+    document.getElementById("p" + i + "y").value = p.y.toFixed(0);
+    pnts.push(p);
+  }
+  console.log(pnts);
+
+  const make = () => {
+    const pnts = [];
+    for (let i = 0; i < 4; i++) {
+      const x = parseFloat(document.getElementById("p" + i + "x").value);
+      const y = parseFloat(document.getElementById("p" + i + "y").value);
+      pnts[i] = { x, y };
+    }
+    const w = parseInt(inwidth.value);
+    const h = parseInt(inheight.value);
+    canvas2.width = w;
+    canvas2.height = h; //canvas2.width / 16 * 9;
+    console.log(canvas2.width, canvas2.height)
+    canvas2.aspectRatio = canvas2.width / canvas2.height;
+    const g2 = canvas2.getContext("2d");
+
+
+    const calcPartialPoint = (p0, p1, ratio) => {
+      const dx = p1.x - p0.x;
+      const dy = p1.y - p0.y;
+      const x = p0.x + dx * ratio;
+      const y = p0.y + dy * ratio;
+      return { x, y };
+    };
+    const getPartialColor = (imgd, p) => {
+      const x = Math.floor(p.x);
+      const y = Math.floor(p.y);
+      const i0 = (x + y * imgd.width) * 4;
+      const i1 = i0 + 4;
+      const i2 = i0 + imgd.width * 4;
+      const i3 = i2 + 4;
+      const d = imgd.data;
+
+      const r1 = p.x - x;
+      const r0 = 1 - r1;
+      const cr1 = d[i0] * r0 + d[i1] * r1;
+      const cg1 = d[i0 + 1] * r0 + d[i1 + 1] * r1;
+      const cb1 = d[i0 + 1] * r0 + d[i1 + 2] * r1;
+      const cr2 = d[i2] * r0 + d[i3] * r1;
+      const cg2 = d[i2 + 1] * r0 + d[i3 + 1] * r1;
+      const cb2 = d[i2 + 1] * r0 + d[i3 + 2] * r1;
+      
+      const r3 = p.y - y;
+      const r2 = 1 - r3;
+      const r = Math.floor(cr1 * r2 + cr2 * r3);
+      const g = Math.floor(cg1 * r2 + cg2 * r3);
+      const b = Math.floor(cb1 * r2 + cb2 * r3);
+      return { r, g, b };
+    };
+
+    const dstimgd = g.createImageData(w, h);
+    for (let y = 0; y < h; y++) {
+      const py0 = calcPartialPoint(pnts[0], pnts[3], y / h);
+      const py1 = calcPartialPoint(pnts[1], pnts[2], y / h);
+      for (let x = 0; x < w; x++) {
+        const p = calcPartialPoint(py0, py1, x / w);
+        const c = getPartialColor(imgd, p);
+        const idx2 = (x + y * w) * 4;
+        dstimgd.data[idx2] = c.r;
+        dstimgd.data[idx2 + 1] = c.g;
+        dstimgd.data[idx2 + 2] = c.b;
+        dstimgd.data[idx2 + 3] = 255; // alpha
+      }
+    }
+    console.log(dstimgd);
+    g2.putImageData(dstimgd, 0, 0);
+  };
+
+  for (let i = 0; i < 4; i++) {
+    document.getElementById("p" + i + "x").onchange = make;
+    document.getElementById("p" + i + "y").onchange = make;
+  }
+  inwidth.onchange = make;
+  inheight.onchange = make;
+
+  make();
+};
+
+setDropImageFileListener(document.body, async (img) => {
+  //imgc.innerHTML = "";
+  //imgc.appendChild(img);
+  await setImage(img);
+});
+
+canvas.width = 1600;
+canvas.height = 900;
+const g = canvas.getContext("2d");
+g.font = "bold 48px serif";
+g.fillText("drop image file here", 50, 100);
+
+/*
+const imgdefault = new Image();
+imgdefault.src = "./IMG_9184.jpg";
+await waitImageLoad(imgdefault);
+await setImage(imgdefault);
+*/
+
+</script>
