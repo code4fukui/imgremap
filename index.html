@@ -124,13 +124,48 @@ const setImage = async (img) => {
       const b = Math.floor(cb1 * r2 + cb2 * r3);
       return { r, g, b };
     };
+    const calcLen = (p0, p1) => {
+      const dx = p0.x - p1.x;
+      const dy = p0.y - p1.y;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
 
     const dstimgd = g.createImageData(w, h);
+    
+    const lenl = calcLen(pnts[0], pnts[3]);
+    const lenr = calcLen(pnts[1], pnts[2]);
+    const lent = calcLen(pnts[0], pnts[1]);
+    const lenb = calcLen(pnts[2], pnts[3]);
+
+    const calcRatio = (h, lenl, lenr) => {
+      const yr = [];
+      let ysum = 0;
+      for (let y = 0; y < h; y++) {
+        const l = Math.pow(lenl + (lenr - lenl) * y / h, 2);
+        yr.push(l);
+        ysum += l;
+      }
+      for (let y = 0; y < h; y++) {
+        yr[y] /= ysum;
+      }
+      let yy = 0
+      for (let y = 0; y < h; y++) {
+        yy += yr[y];
+        yr[y] = yy;
+      }
+      return yr;
+    };
+    const yr = calcRatio(h, lent, lenb);
+    const xr = calcRatio(w, lenl, lenr);
     for (let y = 0; y < h; y++) {
-      const py0 = calcPartialPoint(pnts[0], pnts[3], y / h);
-      const py1 = calcPartialPoint(pnts[1], pnts[2], y / h);
+      //const p = y / h; // linear
+      const ry = yr[y];
+      const py0 = calcPartialPoint(pnts[0], pnts[3], ry);
+      const py1 = calcPartialPoint(pnts[1], pnts[2], ry);
       for (let x = 0; x < w; x++) {
-        const p = calcPartialPoint(py0, py1, x / w);
+        //const rx = x / w; // linear
+        const rx = xr[x];
+        const p = calcPartialPoint(py0, py1, rx);
         const c = getPartialColor(imgd, p);
         const idx2 = (x + y * w) * 4;
         dstimgd.data[idx2] = c.r;
@@ -165,11 +200,11 @@ const g = canvas.getContext("2d");
 g.font = "bold 48px serif";
 g.fillText("drop image file here", 50, 100);
 
-/*
-const imgdefault = new Image();
-imgdefault.src = "./IMG_9184.jpg";
-await waitImageLoad(imgdefault);
-await setImage(imgdefault);
-*/
+// test image
+const img = new Image();
+img.src = "./orgimg.jpg";
+await waitImageLoad(img);
+await setImage(img);
+
 
 </script>
