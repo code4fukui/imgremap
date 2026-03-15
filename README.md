@@ -1,5 +1,7 @@
 # imgremap
 
+> 日本語のREADMEはこちらです: [README.ja.md](README.ja.md)
+
 A web-based tool for remapping and resizing images.
 
 ## Demo
